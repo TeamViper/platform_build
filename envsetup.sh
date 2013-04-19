@@ -15,7 +15,6 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - mka: Builds using SCHED_BATCH on all processors
 - mbot: Builds for all devices using the psuedo buildbot
 - mkapush: Same as mka with the addition of adb pushing to the device.
-- pstest: cherry pick a patch from the viper gerrit instance.
 - taco: Builds for a single device using the pseudo buildbot
 - reposync: Parallel repo sync using ionice and SCHED_BATCH
 
