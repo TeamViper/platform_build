@@ -1,16 +1,23 @@
 function hmm() {
 cat <<EOF
 Invoke ". build/envsetup.sh" from your shell to add the following functions to your environment:
-- lunch:   lunch <product_name>-<build_variant>
-- tapas:   tapas [<App1> <App2> ...] [arm|x86|mips] [eng|userdebug|user]
-- croot:   Changes directory to the top of the tree.
-- m:       Makes from the top of the tree.
-- mm:      Builds all of the modules in the current directory.
-- mmm:     Builds all of the modules in the supplied directories.
-- cgrep:   Greps on all local C/C++ files.
-- jgrep:   Greps on all local Java files.
+- lunch: lunch <product_name>-<build_variant>
+- tapas: tapas [<App1> <App2> ...] [arm|x86|mips] [eng|userdebug|user]
+- croot: Changes directory to the top of the tree.
+- groot: Changes directory to the root of the git project.
+- m: Makes from the top of the tree.
+- mm: Builds all of the modules in the current directory.
+- mmm: Builds all of the modules in the supplied directories.
+- cgrep: Greps on all local C/C++ files.
+- jgrep: Greps on all local Java files.
 - resgrep: Greps on all local res/*.xml files.
-- godir:   Go to the directory containing a file.
+- godir: Go to the directory containing a file.
+- mka: Builds using SCHED_BATCH on all processors
+- mbot: Builds for all devices using the psuedo buildbot
+- mkapush: Same as mka with the addition of adb pushing to the device.
+- pstest: cherry pick a patch from the viper gerrit instance.
+- taco: Builds for a single device using the pseudo buildbot
+- reposync: Parallel repo sync using ionice and SCHED_BATCH
 
 Look at the source to view more functions. The complete list is:
 EOF
@@ -18,9 +25,9 @@ EOF
     local A
     A=""
     for i in `cat $T/build/envsetup.sh | sed -n "/^function /s/function \([a-z_]*\).*/\1/p" | sort`; do
-      A="$A $i"
+A="$A $i"
     done
-    echo $A
+echo $A
 }
 
 # Get the value of a build variable as an absolute path.
@@ -28,9 +35,9 @@ function get_abs_build_var()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
-    fi
+fi
     (cd $T; CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
       make --no-print-directory -C "$T" -f build/core/config.mk dumpvar-abs-$1)
 }
@@ -40,10 +47,10 @@ function get_build_var()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
-    fi
-    CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
+fi
+CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
       make --no-print-directory -C "$T" -f build/core/config.mk dumpvar-$1
 }
 
@@ -52,9 +59,17 @@ function check_product()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
+fi
+
+if (echo -n $1 | grep -q -e "^viper_") ; then
+VIPER_PRODUCT=$(echo -n $1 | sed -e 's/^viper_//g')
+    else
+VIPER_PRODUCT=
     fi
+export VIPER_PRODUCT
+
     CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
         TARGET_PRODUCT=$1 \
         TARGET_BUILD_VARIANT= \
@@ -71,31 +86,31 @@ function check_variant()
 {
     for v in ${VARIANT_CHOICES[@]}
     do
-        if [ "$v" = "$1" ]
+if [ "$v" = "$1" ]
         then
-            return 0
+return 0
         fi
-    done
-    return 1
+done
+return 1
 }
 
 function setpaths()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
         return
-    fi
+fi
 
     ##################################################################
-    #                                                                #
-    #              Read me before you modify this code               #
-    #                                                                #
-    #   This function sets ANDROID_BUILD_PATHS to what it is adding  #
-    #   to PATH, and the next time it is run, it removes that from   #
-    #   PATH.  This is required so lunch can be run more than once   #
-    #   and still have working paths.                                #
-    #                                                                #
+    # #
+    # Read me before you modify this code #
+    # #
+    # This function sets ANDROID_BUILD_PATHS to what it is adding #
+    # to PATH, and the next time it is run, it removes that from #
+    # PATH. This is required so lunch can be run more than once #
+    # and still have working paths. #
+    # #
     ##################################################################
 
     # Note: on windows/cygwin, ANDROID_BUILD_PATHS will contain spaces
@@ -103,10 +118,10 @@ function setpaths()
 
     # out with the old
     if [ -n "$ANDROID_BUILD_PATHS" ] ; then
-        export PATH=${PATH/$ANDROID_BUILD_PATHS/}
+export PATH=${PATH/$ANDROID_BUILD_PATHS/}
     fi
-    if [ -n "$ANDROID_PRE_BUILD_PATHS" ] ; then
-        export PATH=${PATH/$ANDROID_PRE_BUILD_PATHS/}
+if [ -n "$ANDROID_PRE_BUILD_PATHS" ] ; then
+export PATH=${PATH/$ANDROID_PRE_BUILD_PATHS/}
         # strip leading ':', if any
         export PATH=${PATH/:%/}
     fi
@@ -131,16 +146,16 @@ function setpaths()
             toolchaindir=xxxxxxxxx
             ;;
     esac
-    if [ -d "$gccprebuiltdir/$toolchaindir" ]; then
-        export ANDROID_EABI_TOOLCHAIN=$gccprebuiltdir/$toolchaindir
+if [ -d "$gccprebuiltdir/$toolchaindir" ]; then
+export ANDROID_EABI_TOOLCHAIN=$gccprebuiltdir/$toolchaindir
     fi
 
-    unset ARM_EABI_TOOLCHAIN ARM_EABI_TOOLCHAIN_PATH
+unset ARM_EABI_TOOLCHAIN ARM_EABI_TOOLCHAIN_PATH
     case $ARCH in
         arm)
             toolchaindir=arm/arm-eabi-4.6/bin
             if [ -d "$gccprebuiltdir/$toolchaindir" ]; then
-                 export ARM_EABI_TOOLCHAIN="$gccprebuiltdir/$toolchaindir"
+export ARM_EABI_TOOLCHAIN="$gccprebuiltdir/$toolchaindir"
                  ARM_EABI_TOOLCHAIN_PATH=":$gccprebuiltdir/$toolchaindir"
             fi
             ;;
@@ -151,7 +166,7 @@ function setpaths()
             ;;
     esac
 
-    export ANDROID_TOOLCHAIN=$ANDROID_EABI_TOOLCHAIN
+export ANDROID_TOOLCHAIN=$ANDROID_EABI_TOOLCHAIN
     export ANDROID_QTOOLS=$T/development/emulator/qtools
     export ANDROID_DEV_SCRIPTS=$T/development/scripts
     export ANDROID_BUILD_PATHS=$(get_build_var ANDROID_BUILD_PATHS):$ANDROID_QTOOLS:$ANDROID_TOOLCHAIN$ARM_EABI_TOOLCHAIN_PATH$CODE_REVIEWS:$ANDROID_DEV_SCRIPTS:
@@ -160,12 +175,12 @@ function setpaths()
     unset ANDROID_JAVA_TOOLCHAIN
     unset ANDROID_PRE_BUILD_PATHS
     if [ -n "$JAVA_HOME" ]; then
-        export ANDROID_JAVA_TOOLCHAIN=$JAVA_HOME/bin
+export ANDROID_JAVA_TOOLCHAIN=$JAVA_HOME/bin
         export ANDROID_PRE_BUILD_PATHS=$ANDROID_JAVA_TOOLCHAIN:
         export PATH=$ANDROID_PRE_BUILD_PATHS$PATH
     fi
 
-    unset ANDROID_PRODUCT_OUT
+unset ANDROID_PRODUCT_OUT
     export ANDROID_PRODUCT_OUT=$(get_abs_build_var PRODUCT_OUT)
     export OUT=$ANDROID_PRODUCT_OUT
 
@@ -185,10 +200,10 @@ function printconfig()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
-    fi
-    get_build_var report_config
+fi
+get_build_var report_config
 }
 
 function set_stuff_for_environment()
@@ -209,16 +224,16 @@ function set_sequence_number()
 function settitle()
 {
     if [ "$STAY_OFF_MY_LAWN" = "" ]; then
-        local arch=$(gettargetarch)
+local arch=$(gettargetarch)
         local product=$TARGET_PRODUCT
         local variant=$TARGET_BUILD_VARIANT
         local apps=$TARGET_BUILD_APPS
         if [ -z "$apps" ]; then
-            export PROMPT_COMMAND="echo -ne \"\033]0;[${arch}-${product}-${variant}] ${USER}@${HOSTNAME}: ${PWD}\007\""
+export PROMPT_COMMAND="echo -ne \"\033]0;[${arch}-${product}-${variant}] ${USER}@${HOSTNAME}: ${PWD}\007\""
         else
-            export PROMPT_COMMAND="echo -ne \"\033]0;[$arch $apps $variant] ${USER}@${HOSTNAME}: ${PWD}\007\""
+export PROMPT_COMMAND="echo -ne \"\033]0;[$arch $apps $variant] ${USER}@${HOSTNAME}: ${PWD}\007\""
         fi
-    fi
+fi
 }
 
 function addcompletions()
@@ -227,31 +242,31 @@ function addcompletions()
 
     # Keep us from trying to run in something that isn't bash.
     if [ -z "${BASH_VERSION}" ]; then
-        return
-    fi
+return
+fi
 
     # Keep us from trying to run in bash that's too old.
     if [ ${BASH_VERSINFO[0]} -lt 3 ]; then
-        return
-    fi
+return
+fi
 
-    dir="sdk/bash_completion"
+dir="sdk/bash_completion"
     if [ -d ${dir} ]; then
-        for f in `/bin/ls ${dir}/[a-z]*.bash 2> /dev/null`; do
-            echo "including $f"
+for f in `/bin/ls ${dir}/[a-z]*.bash 2> /dev/null`; do
+echo "including $f"
             . $f
         done
-    fi
+fi
 }
 
 function choosetype()
 {
     echo "Build type choices are:"
-    echo "     1. release"
-    echo "     2. debug"
+    echo " 1. release"
+    echo " 2. debug"
     echo
 
-    local DEFAULT_NUM DEFAULT_VALUE
+local DEFAULT_NUM DEFAULT_VALUE
     DEFAULT_NUM=1
     DEFAULT_VALUE=release
 
@@ -259,14 +274,14 @@ function choosetype()
     local ANSWER
     while [ -z $TARGET_BUILD_TYPE ]
     do
-        echo -n "Which would you like? ["$DEFAULT_NUM"] "
+echo -n "Which would you like? ["$DEFAULT_NUM"] "
         if [ -z "$1" ] ; then
-            read ANSWER
+read ANSWER
         else
-            echo $1
+echo $1
             ANSWER=$1
         fi
-        case $ANSWER in
+case $ANSWER in
         "")
             export TARGET_BUILD_TYPE=$DEFAULT_VALUE
             ;;
@@ -284,60 +299,60 @@ function choosetype()
             ;;
         *)
             echo
-            echo "I didn't understand your response.  Please try again."
+echo "I didn't understand your response. Please try again."
             echo
             ;;
         esac
-        if [ -n "$1" ] ; then
-            break
-        fi
-    done
+if [ -n "$1" ] ; then
+break
+fi
+done
 
-    set_stuff_for_environment
+set_stuff_for_environment
 }
 
 #
-# This function isn't really right:  It chooses a TARGET_PRODUCT
-# based on the list of boards.  Usually, that gets you something
+# This function isn't really right: It chooses a TARGET_PRODUCT
+# based on the list of boards. Usually, that gets you something
 # that kinda works with a generic product, but really, you should
 # pick a product by name.
 #
 function chooseproduct()
 {
     if [ "x$TARGET_PRODUCT" != x ] ; then
-        default_value=$TARGET_PRODUCT
+default_value=$TARGET_PRODUCT
     else
-        default_value=full
+default_value=full
     fi
 
-    export TARGET_PRODUCT=
+export TARGET_PRODUCT=
     local ANSWER
     while [ -z "$TARGET_PRODUCT" ]
     do
-        echo -n "Which product would you like? [$default_value] "
+echo -n "Which product would you like? [$default_value] "
         if [ -z "$1" ] ; then
-            read ANSWER
+read ANSWER
         else
-            echo $1
+echo $1
             ANSWER=$1
         fi
 
-        if [ -z "$ANSWER" ] ; then
-            export TARGET_PRODUCT=$default_value
+if [ -z "$ANSWER" ] ; then
+export TARGET_PRODUCT=$default_value
         else
-            if check_product $ANSWER
+if check_product $ANSWER
             then
-                export TARGET_PRODUCT=$ANSWER
+export TARGET_PRODUCT=$ANSWER
             else
-                echo "** Not a valid product: $ANSWER"
+echo "** Not a valid product: $ANSWER"
             fi
-        fi
-        if [ -n "$1" ] ; then
-            break
-        fi
-    done
+fi
+if [ -n "$1" ] ; then
+break
+fi
+done
 
-    set_stuff_for_environment
+set_stuff_for_environment
 }
 
 function choosevariant()
@@ -349,42 +364,42 @@ function choosevariant()
     do
         # The product name is the name of the directory containing
         # the makefile we found, above.
-        echo "     $index. $v"
+        echo " $index. $v"
         index=$(($index+1))
     done
 
-    local default_value=eng
+local default_value=eng
     local ANSWER
 
     export TARGET_BUILD_VARIANT=
     while [ -z "$TARGET_BUILD_VARIANT" ]
     do
-        echo -n "Which would you like? [$default_value] "
+echo -n "Which would you like? [$default_value] "
         if [ -z "$1" ] ; then
-            read ANSWER
+read ANSWER
         else
-            echo $1
+echo $1
             ANSWER=$1
         fi
 
-        if [ -z "$ANSWER" ] ; then
-            export TARGET_BUILD_VARIANT=$default_value
+if [ -z "$ANSWER" ] ; then
+export TARGET_BUILD_VARIANT=$default_value
         elif (echo -n $ANSWER | grep -q -e "^[0-9][0-9]*$") ; then
-            if [ "$ANSWER" -le "${#VARIANT_CHOICES[@]}" ] ; then
-                export TARGET_BUILD_VARIANT=${VARIANT_CHOICES[$(($ANSWER-1))]}
+if [ "$ANSWER" -le "${#VARIANT_CHOICES[@]}" ] ; then
+export TARGET_BUILD_VARIANT=${VARIANT_CHOICES[$(($ANSWER-1))]}
             fi
-        else
-            if check_variant $ANSWER
+else
+if check_variant $ANSWER
             then
-                export TARGET_BUILD_VARIANT=$ANSWER
+export TARGET_BUILD_VARIANT=$ANSWER
             else
-                echo "** Not a valid variant: $ANSWER"
+echo "** Not a valid variant: $ANSWER"
             fi
-        fi
-        if [ -n "$1" ] ; then
-            break
-        fi
-    done
+fi
+if [ -n "$1" ] ; then
+break
+fi
+done
 }
 
 function choosecombo()
@@ -392,19 +407,19 @@ function choosecombo()
     choosetype $1
 
     echo
-    echo
-    chooseproduct $2
+echo
+chooseproduct $2
 
     echo
-    echo
-    choosevariant $3
+echo
+choosevariant $3
 
     echo
-    set_stuff_for_environment
+set_stuff_for_environment
     printconfig
 }
 
-# Clear this variable.  It will be built up again when the vendorsetup.sh
+# Clear this variable. It will be built up again when the vendorsetup.sh
 # files are included at the end of this file.
 unset LUNCH_MENU_CHOICES
 function add_lunch_combo()
@@ -412,11 +427,11 @@ function add_lunch_combo()
     local new_combo=$1
     local c
     for c in ${LUNCH_MENU_CHOICES[@]} ; do
-        if [ "$new_combo" = "$c" ] ; then
-            return
-        fi
-    done
-    LUNCH_MENU_CHOICES=(${LUNCH_MENU_CHOICES[@]} $new_combo)
+if [ "$new_combo" = "$c" ] ; then
+return
+fi
+done
+LUNCH_MENU_CHOICES=(${LUNCH_MENU_CHOICES[@]} $new_combo)
 }
 
 # add the default one here
@@ -429,91 +444,142 @@ function print_lunch_menu()
 {
     local uname=$(uname)
     echo
-    echo "You're building on" $uname
+echo "You're building on" $uname
     echo
-    echo "Lunch menu... pick a combo:"
+if [ "z${VIPER_DEVICES_ONLY}" != "z" ]; then
+echo "Breakfast menu... pick a combo:"
+    else
+echo "Lunch menu... pick a combo:"
+    fi
 
-    local i=1
+local i=1
     local choice
     for choice in ${LUNCH_MENU_CHOICES[@]}
     do
-        echo "     $i. $choice"
+echo " $i. $choice"
         i=$(($i+1))
     done
 
-    echo
+if [ "z${VIPER_DEVICES_ONLY}" != "z" ]; then
+echo "... and don't forget the bacon!"
+    fi
+
+echo
 }
+
+function brunch()
+{
+    breakfast $*
+    if [ $? -eq 0 ]; then
+mka bacon
+    else
+echo "No such item in brunch menu. Try 'breakfast'"
+        return 1
+    fi
+return $?
+}
+
+function breakfast()
+{
+    target=$1
+    VIPER_DEVICES_ONLY="true"
+    unset LUNCH_MENU_CHOICES
+    add_lunch_combo full-eng
+    for f in `/bin/ls vendor/viper/vendorsetup.sh 2> /dev/null`
+        do
+echo "including $f"
+            . $f
+        done
+unset f
+
+    if [ $# -eq 0 ]; then
+        # No arguments, so let's have the full menu
+        lunch
+    else
+echo "z$target" | grep -q "-"
+        if [ $? -eq 0 ]; then
+            # A buildtype was specified, assume a full device name
+            lunch $target
+        else
+            # This is probably just the viper model name
+            lunch viper_$target-userdebug
+        fi
+fi
+return $?
+}
+
+alias bib=breakfast
 
 function lunch()
 {
     local answer
 
     if [ "$1" ] ; then
-        answer=$1
+answer=$1
     else
-        print_lunch_menu
+print_lunch_menu
         echo -n "Which would you like? [full-eng] "
         read answer
     fi
 
-    local selection=
+local selection=
 
     if [ -z "$answer" ]
     then
-        selection=full-eng
+selection=full-eng
     elif (echo -n $answer | grep -q -e "^[0-9][0-9]*$")
     then
-        if [ $answer -le ${#LUNCH_MENU_CHOICES[@]} ]
+if [ $answer -le ${#LUNCH_MENU_CHOICES[@]} ]
         then
-            selection=${LUNCH_MENU_CHOICES[$(($answer-1))]}
+selection=${LUNCH_MENU_CHOICES[$(($answer-1))]}
         fi
-    elif (echo -n $answer | grep -q -e "^[^\-][^\-]*-[^\-][^\-]*$")
+elif (echo -n $answer | grep -q -e "^[^\-][^\-]*-[^\-][^\-]*$")
     then
-        selection=$answer
+selection=$answer
     fi
 
-    if [ -z "$selection" ]
+if [ -z "$selection" ]
     then
-        echo
-        echo "Invalid lunch combo: $answer"
+echo
+echo "Invalid lunch combo: $answer"
         return 1
     fi
 
-    export TARGET_BUILD_APPS=
+export TARGET_BUILD_APPS=
 
     local product=$(echo -n $selection | sed -e "s/-.*$//")
     check_product $product
     if [ $? -ne 0 ]
     then
-        echo
-        echo "** Don't have a product spec for: '$product'"
+echo
+echo "** Don't have a product spec for: '$product'"
         echo "** Do you have the right repo manifest?"
         product=
     fi
 
-    local variant=$(echo -n $selection | sed -e "s/^[^\-]*-//")
+local variant=$(echo -n $selection | sed -e "s/^[^\-]*-//")
     check_variant $variant
     if [ $? -ne 0 ]
     then
-        echo
-        echo "** Invalid variant: '$variant'"
+echo
+echo "** Invalid variant: '$variant'"
         echo "** Must be one of ${VARIANT_CHOICES[@]}"
         variant=
     fi
 
-    if [ -z "$product" -o -z "$variant" ]
+if [ -z "$product" -o -z "$variant" ]
     then
-        echo
-        return 1
+echo
+return 1
     fi
 
-    export TARGET_PRODUCT=$product
+export TARGET_PRODUCT=$product
     export TARGET_BUILD_VARIANT=$variant
     export TARGET_BUILD_TYPE=release
 
     echo
 
-    set_stuff_for_environment
+set_stuff_for_environment
     printconfig
 }
 
@@ -539,27 +605,27 @@ function tapas()
     local apps=$(echo -n $(echo $* | xargs -n 1 echo | \grep -E -v '^(user|userdebug|eng|arm|x86|mips)$'))
 
     if [ $(echo $arch | wc -w) -gt 1 ]; then
-        echo "tapas: Error: Multiple build archs supplied: $arch"
+echo "tapas: Error: Multiple build archs supplied: $arch"
         return
-    fi
-    if [ $(echo $variant | wc -w) -gt 1 ]; then
-        echo "tapas: Error: Multiple build variants supplied: $variant"
+fi
+if [ $(echo $variant | wc -w) -gt 1 ]; then
+echo "tapas: Error: Multiple build variants supplied: $variant"
         return
-    fi
+fi
 
-    local product=full
+local product=full
     case $arch in
-      x86)   product=full_x86;;
-      mips)  product=full_mips;;
+      x86) product=full_x86;;
+      mips) product=full_mips;;
     esac
-    if [ -z "$variant" ]; then
-        variant=eng
+if [ -z "$variant" ]; then
+variant=eng
     fi
-    if [ -z "$apps" ]; then
-        apps=all
+if [ -z "$apps" ]; then
+apps=all
     fi
 
-    export TARGET_PRODUCT=$product
+export TARGET_PRODUCT=$product
     export TARGET_BUILD_VARIANT=$variant
     export TARGET_BUILD_TYPE=release
     export TARGET_BUILD_APPS=$apps
@@ -568,13 +634,50 @@ function tapas()
     printconfig
 }
 
+function eat()
+{
+    if [ "$OUT" ] ; then
+MODVERSION=`sed -n -e'/ro\.cm\.version/s/.*=//p' $OUT/system/build.prop`
+        ZIPFILE=update-cm-$MODVERSION-signed.zip
+        ZIPPATH=$OUT/$ZIPFILE
+        if [ ! -f $ZIPPATH ] ; then
+echo "Nothing to eat"
+            return 1
+        fi
+adb start-server # Prevent unexpected starting server message from adb get-state in the next line
+        if [ $(adb get-state) != device -a $(adb shell busybox test -e /sbin/recovery 2> /dev/null; echo $?) != 0 ] ; then
+echo "No device is online. Waiting for one..."
+            echo "Please connect USB and/or enable USB debugging"
+            until [ $(adb get-state) = device -o $(adb shell busybox test -e /sbin/recovery 2> /dev/null; echo $?) = 0 ];do
+sleep 1
+            done
+echo "Device Found.."
+        fi
+echo "Pushing $ZIPFILE to device"
+        if adb push $ZIPPATH /storage/sdcard0/ ; then
+cat << EOF > /tmp/command
+--update_package=/sdcard/$ZIPFILE
+EOF
+            if adb push /tmp/command /cache/recovery/ ; then
+echo "Rebooting into recovery for installation"
+                adb reboot recovery
+            fi
+rm /tmp/command
+        fi
+else
+echo "Nothing to eat"
+        return 1
+    fi
+return $?
+}
+
 function gettop
 {
     local TOPFILE=build/core/envsetup.mk
     if [ -n "$TOP" -a -f "$TOP/$TOPFILE" ] ; then
-        echo $TOP
+echo $TOP
     else
-        if [ -f $TOPFILE ] ; then
+if [ -f $TOPFILE ] ; then
             # The following circumlocution (repeated below as well) ensures
             # that we record the true directory name and not one that is
             # faked up with symlink names.
@@ -586,24 +689,24 @@ function gettop
             local HERE=$PWD
             T=
             while [ \( ! \( -f $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
-                cd .. > /dev/null
+cd .. > /dev/null
                 T=`PWD= /bin/pwd`
             done
-            cd $HERE > /dev/null
+cd $HERE > /dev/null
             if [ -f "$T/$TOPFILE" ]; then
-                echo $T
+echo $T
             fi
-        fi
-    fi
+fi
+fi
 }
 
 function m()
 {
     T=$(gettop)
     if [ "$T" ]; then
-        make -C $T $@
+make -C $T $@
     else
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
     fi
 }
 
@@ -616,15 +719,15 @@ function findmakefile()
     local HERE=$PWD
     T=
     while [ \( ! \( -f $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
-        T=`PWD= /bin/pwd`
+T=`PWD= /bin/pwd`
         if [ -f "$T/Android.mk" ]; then
-            echo $T/Android.mk
+echo $T/Android.mk
             cd $HERE > /dev/null
             return
-        fi
-        cd .. > /dev/null
+fi
+cd .. > /dev/null
     done
-    cd $HERE > /dev/null
+cd $HERE > /dev/null
 }
 
 function mm()
@@ -632,7 +735,7 @@ function mm()
     # If we're sitting in the root of the build tree, just do a
     # normal make.
     if [ -f build/core/envsetup.mk -a -f Makefile ]; then
-        make $@
+make $@
     else
         # Find the closest Android.mk file.
         T=$(gettop)
@@ -640,60 +743,60 @@ function mm()
         # Remove the path to top as the makefilepath needs to be relative
         local M=`echo $M|sed 's:'$T'/::'`
         if [ ! "$T" ]; then
-            echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
         elif [ ! "$M" ]; then
-            echo "Couldn't locate a makefile from the current directory."
+echo "Couldn't locate a makefile from the current directory."
         else
-            ONE_SHOT_MAKEFILE=$M make -C $T all_modules $@
+ONE_SHOT_MAKEFILE=$M make -C $T all_modules $@
         fi
-    fi
+fi
 }
 
 function mmm()
 {
     T=$(gettop)
     if [ "$T" ]; then
-        local MAKEFILE=
+local MAKEFILE=
         local MODULES=
         local ARGS=
         local DIR TO_CHOP
         local DASH_ARGS=$(echo "$@" | awk -v RS=" " -v ORS=" " '/^-.*$/')
         local DIRS=$(echo "$@" | awk -v RS=" " -v ORS=" " '/^[^-].*$/')
         for DIR in $DIRS ; do
-            MODULES=`echo $DIR | sed -n -e 's/.*:\(.*$\)/\1/p' | sed 's/,/ /'`
+MODULES=`echo $DIR | sed -n -e 's/.*:\(.*$\)/\1/p' | sed 's/,/ /'`
             if [ "$MODULES" = "" ]; then
-                MODULES=all_modules
+MODULES=all_modules
             fi
-            DIR=`echo $DIR | sed -e 's/:.*//' -e 's:/$::'`
+DIR=`echo $DIR | sed -e 's/:.*//' -e 's:/$::'`
             if [ -f $DIR/Android.mk ]; then
-                TO_CHOP=`(cd -P -- $T && pwd -P) | wc -c | tr -d ' '`
+TO_CHOP=`(cd -P -- $T && pwd -P) | wc -c | tr -d ' '`
                 TO_CHOP=`expr $TO_CHOP + 1`
                 START=`PWD= /bin/pwd`
                 MFILE=`echo $START | cut -c${TO_CHOP}-`
                 if [ "$MFILE" = "" ] ; then
-                    MFILE=$DIR/Android.mk
+MFILE=$DIR/Android.mk
                 else
-                    MFILE=$MFILE/$DIR/Android.mk
+MFILE=$MFILE/$DIR/Android.mk
                 fi
-                MAKEFILE="$MAKEFILE $MFILE"
+MAKEFILE="$MAKEFILE $MFILE"
             else
-                if [ "$DIR" = snod ]; then
-                    ARGS="$ARGS snod"
+if [ "$DIR" = snod ]; then
+ARGS="$ARGS snod"
                 elif [ "$DIR" = showcommands ]; then
-                    ARGS="$ARGS showcommands"
+ARGS="$ARGS showcommands"
                 elif [ "$DIR" = dist ]; then
-                    ARGS="$ARGS dist"
+ARGS="$ARGS dist"
                 elif [ "$DIR" = incrementaljavac ]; then
-                    ARGS="$ARGS incrementaljavac"
+ARGS="$ARGS incrementaljavac"
                 else
-                    echo "No Android.mk in $DIR."
+echo "No Android.mk in $DIR."
                     return 1
                 fi
-            fi
-        done
-        ONE_SHOT_MAKEFILE="$MAKEFILE" make -C $T $DASH_ARGS $MODULES $ARGS
+fi
+done
+ONE_SHOT_MAKEFILE="$MAKEFILE" make -C $T $DASH_ARGS $MODULES $ARGS
     else
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
     fi
 }
 
@@ -701,9 +804,19 @@ function croot()
 {
     T=$(gettop)
     if [ "$T" ]; then
-        cd $(gettop)
+cd $(gettop)
     else
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
+    fi
+}
+
+function groot()
+{
+    T=$(git rev-parse --show-cdup)
+    if [ "$T" ]; then
+cd $(git rev-parse --show-cdup)
+    else
+echo "Already at the root of the git project."
     fi
 }
 
@@ -716,14 +829,14 @@ function cproj()
     local HERE=$PWD
     T=
     while [ \( ! \( -f $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
-        T=$PWD
+T=$PWD
         if [ -f "$T/Android.mk" ]; then
-            cd $T
+cd $T
             return
-        fi
-        cd .. > /dev/null
+fi
+cd .. > /dev/null
     done
-    cd $HERE > /dev/null
+cd $HERE > /dev/null
     echo "can't find Android.mk"
 }
 
@@ -731,10 +844,10 @@ function pid()
 {
    local EXE="$1"
    if [ "$EXE" ] ; then
-       local PID=`adb shell ps | fgrep $1 | sed -e 's/[^ ]* *\([0-9]*\).*/\1/'`
+local PID=`adb shell ps | fgrep $1 | sed -e 's/[^ ]* *\([0-9]*\).*/\1/'`
        echo "$PID"
    else
-       echo "usage: pid name"
+echo "usage: pid name"
    fi
 }
 
@@ -761,49 +874,49 @@ function gdbclient()
        *) echo "Unknown arch $ARCH"; return 1;;
    esac
 
-   if [ "$OUT_ROOT" -a "$PREBUILTS" ]; then
-       local EXE="$1"
+if [ "$OUT_ROOT" -a "$PREBUILTS" ]; then
+local EXE="$1"
        if [ "$EXE" ] ; then
-           EXE=$1
+EXE=$1
        else
-           EXE="app_process"
+EXE="app_process"
        fi
 
-       local PORT="$2"
+local PORT="$2"
        if [ "$PORT" ] ; then
-           PORT=$2
+PORT=$2
        else
-           PORT=":5039"
+PORT=":5039"
        fi
 
-       local PID
+local PID
        local PROG="$3"
        if [ "$PROG" ] ; then
-           if [[ "$PROG" =~ ^[0-9]+$ ]] ; then
-               PID="$3"
+if [[ "$PROG" =~ ^[0-9]+$ ]] ; then
+PID="$3"
            else
-               PID=`pid $3`
+PID=`pid $3`
            fi
-           adb forward "tcp$PORT" "tcp$PORT"
+adb forward "tcp$PORT" "tcp$PORT"
            adb shell gdbserver $PORT --attach $PID &
            sleep 2
        else
-               echo ""
+echo ""
                echo "If you haven't done so already, do this first on the device:"
-               echo "    gdbserver $PORT /system/bin/$EXE"
+               echo " gdbserver $PORT /system/bin/$EXE"
                    echo " or"
-               echo "    gdbserver $PORT --attach $PID"
+               echo " gdbserver $PORT --attach $PID"
                echo ""
        fi
 
-       echo >|"$OUT_ROOT/gdbclient.cmds" "set solib-absolute-prefix $OUT_SYMBOLS"
+echo >|"$OUT_ROOT/gdbclient.cmds" "set solib-absolute-prefix $OUT_SYMBOLS"
        echo >>"$OUT_ROOT/gdbclient.cmds" "set solib-search-path $OUT_SO_SYMBOLS:$OUT_SO_SYMBOLS/hw:$OUT_SO_SYMBOLS/ssl/engines:$OUT_SO_SYMBOLS/drm:$OUT_SO_SYMBOLS/egl:$OUT_SO_SYMBOLS/soundfx"
        echo >>"$OUT_ROOT/gdbclient.cmds" "target remote $PORT"
        echo >>"$OUT_ROOT/gdbclient.cmds" ""
 
        $ANDROID_TOOLCHAIN/$GDB -x "$OUT_ROOT/gdbclient.cmds" "$OUT_EXE_SYMBOLS/$EXE"
   else
-       echo "Unable to determine build system output dir."
+echo "Unable to determine build system output dir."
    fi
 
 }
@@ -812,14 +925,14 @@ case `uname -s` in
     Darwin)
         function sgrep()
         {
-            find -E . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.(c|h|cpp|S|java|xml|sh|mk)' -print0 | xargs -0 grep --color -n "$@"
+            find -E . -name .repo -prune -o -name .git -prune -o -type f -iregex '.*\.(c|h|cpp|S|java|xml|sh|mk)' -print0 | xargs -0 grep --color -n "$@"
         }
 
         ;;
     *)
         function sgrep()
         {
-            find . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.\(c\|h\|cpp\|S\|java\|xml\|sh\|mk\)' -print0 | xargs -0 grep --color -n "$@"
+            find . -name .repo -prune -o -name .git -prune -o -type f -iregex '.*\.\(c\|h\|cpp\|S\|java\|xml\|sh\|mk\)' -print0 | xargs -0 grep --color -n "$@"
         }
         ;;
 esac
@@ -831,7 +944,7 @@ function gettargetarch
 
 function jgrep()
 {
-    find . -name .repo -prune -o -name .git -prune -o  -type f -name "*\.java" -print0 | xargs -0 grep --color -n "$@"
+    find . -name .repo -prune -o -name .git -prune -o -type f -name "*\.java" -print0 | xargs -0 grep --color -n "$@"
 }
 
 function cgrep()
@@ -880,47 +993,47 @@ function tracedmdump()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
+echo "Couldn't locate the top of the tree. Try setting TOP."
         return
-    fi
-    local prebuiltdir=$(getprebuilt)
+fi
+local prebuiltdir=$(getprebuilt)
     local arch=$(gettargetarch)
     local KERNEL=$T/prebuilts/qemu-kernel/$arch/vmlinux-qemu
 
     local TRACE=$1
     if [ ! "$TRACE" ] ; then
-        echo "usage:  tracedmdump  tracename"
+echo "usage: tracedmdump tracename"
         return
-    fi
+fi
 
-    if [ ! -r "$KERNEL" ] ; then
-        echo "Error: cannot find kernel: '$KERNEL'"
+if [ ! -r "$KERNEL" ] ; then
+echo "Error: cannot find kernel: '$KERNEL'"
         return
-    fi
+fi
 
-    local BASETRACE=$(basename $TRACE)
+local BASETRACE=$(basename $TRACE)
     if [ "$BASETRACE" = "$TRACE" ] ; then
-        TRACE=$ANDROID_PRODUCT_OUT/traces/$TRACE
+TRACE=$ANDROID_PRODUCT_OUT/traces/$TRACE
     fi
 
-    echo "post-processing traces..."
+echo "post-processing traces..."
     rm -f $TRACE/qtrace.dexlist
     post_trace $TRACE
     if [ $? -ne 0 ]; then
-        echo "***"
-        echo "*** Error: malformed trace.  Did you remember to exit the emulator?"
+echo "***"
+        echo "*** Error: malformed trace. Did you remember to exit the emulator?"
         echo "***"
         return
-    fi
-    echo "generating dexlist output..."
+fi
+echo "generating dexlist output..."
     /bin/ls $ANDROID_PRODUCT_OUT/system/framework/*.jar $ANDROID_PRODUCT_OUT/system/app/*.apk $ANDROID_PRODUCT_OUT/data/app/*.apk 2>/dev/null | xargs dexlist > $TRACE/qtrace.dexlist
     echo "generating dmtrace data..."
     q2dm -r $ANDROID_PRODUCT_OUT/symbols $TRACE $KERNEL $TRACE/dmtrace || return
-    echo "generating html file..."
+echo "generating html file..."
     dmtracedump -h $TRACE/dmtrace >| $TRACE/dmtrace.html || return
-    echo "done, see $TRACE/dmtrace.html for details"
+echo "done, see $TRACE/dmtrace.html for details"
     echo "or run:"
-    echo "    traceview $TRACE/dmtrace"
+    echo " traceview $TRACE/dmtrace"
 }
 
 # communicate with a running device or emulator, set up necessary state,
@@ -930,28 +1043,28 @@ function runhat()
     # process standard adb options
     local adbTarget=""
     if [ "$1" = "-d" -o "$1" = "-e" ]; then
-        adbTarget=$1
+adbTarget=$1
         shift 1
     elif [ "$1" = "-s" ]; then
-        adbTarget="$1 $2"
+adbTarget="$1 $2"
         shift 2
     fi
-    local adbOptions=${adbTarget}
+local adbOptions=${adbTarget}
     #echo adbOptions = ${adbOptions}
 
     # runhat options
     local targetPid=$1
 
     if [ "$targetPid" = "" ]; then
-        echo "Usage: runhat [ -d | -e | -s serial ] target-pid"
+echo "Usage: runhat [ -d | -e | -s serial ] target-pid"
         return
-    fi
+fi
 
     # confirm hat is available
     if [ -z $(which hat) ]; then
-        echo "hat is not available in this configuration."
+echo "hat is not available in this configuration."
         return
-    fi
+fi
 
     # issue "am" command to cause the hprof dump
     local sdcard=$(adb shell echo -n '$EXTERNAL_STORAGE')
@@ -964,7 +1077,7 @@ function runhat()
     echo -n "> "
     read
 
-    local localFile=/tmp/$$-hprof
+local localFile=/tmp/$$-hprof
 
     echo "Retrieving file $devFile..."
     adb ${adbOptions} pull $devFile $localFile
@@ -982,14 +1095,14 @@ function getbugreports()
     local reports=(`adb shell ls /sdcard/bugreports | tr -d '\r'`)
 
     if [ ! "$reports" ]; then
-        echo "Could not locate any bugreports."
+echo "Could not locate any bugreports."
         return
-    fi
+fi
 
-    local report
+local report
     for report in ${reports[@]}
     do
-        echo "/sdcard/bugreports/${report}"
+echo "/sdcard/bugreports/${report}"
         adb pull /sdcard/bugreports/${report} ${report}
         gunzip ${report}
     done
@@ -1010,10 +1123,10 @@ function getlastscreenshot()
     local screenshot_path=$(getscreenshotpath)
     local screenshot=`adb ${adbOptions} ls ${screenshot_path} | grep Screenshot_[0-9-]*.*\.png | sort -rk 3 | cut -d " " -f 4 | head -n 1`
     if [ "$screenshot" = "" ]; then
-        echo "No screenshots found."
+echo "No screenshots found."
         return
-    fi
-    echo "${screenshot}"
+fi
+echo "${screenshot}"
     adb ${adbOptions} pull ${screenshot_path}/${screenshot}
 }
 
@@ -1021,9 +1134,9 @@ function startviewserver()
 {
     local port=4939
     if [ $# -gt 0 ]; then
-            port=$1
+port=$1
     fi
-    adb shell service call window 1 i32 $port
+adb shell service call window 1 i32 $port
 }
 
 function stopviewserver()
@@ -1054,16 +1167,16 @@ function key_menu()
 function smoketest()
 {
     if [ ! "$ANDROID_PRODUCT_OUT" ]; then
-        echo "Couldn't locate output files.  Try running 'lunch' first." >&2
+echo "Couldn't locate output files. Try running 'lunch' first." >&2
         return
-    fi
-    T=$(gettop)
+fi
+T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
-    fi
+fi
 
-    (cd "$T" && mmm tests/SmokeTest) &&
+    (cd "$T" && make SmokeTest SmokeTestApp) &&
       adb uninstall com.android.smoketest > /dev/null &&
       adb uninstall com.android.smoketest.tests > /dev/null &&
       adb install $ANDROID_PRODUCT_OUT/data/app/SmokeTestApp.apk &&
@@ -1076,60 +1189,168 @@ function runtest()
 {
     T=$(gettop)
     if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+echo "Couldn't locate the top of the tree. Try setting TOP." >&2
         return
-    fi
+fi
     ("$T"/development/testrunner/runtest.py $@)
 }
 
 function godir () {
     if [[ -z "$1" ]]; then
-        echo "Usage: godir <regex>"
+echo "Usage: godir <regex>"
         return
-    fi
-    T=$(gettop)
+fi
+T=$(gettop)
     if [[ ! -f $T/filelist ]]; then
-        echo -n "Creating index..."
+echo -n "Creating index..."
         (cd $T; find . -wholename ./out -prune -o -wholename ./.repo -prune -o -type f > filelist)
         echo " Done"
         echo ""
     fi
-    local lines
+local lines
     lines=($(\grep "$1" $T/filelist | sed -e 's/\/[^/]*$//' | sort | uniq))
     if [[ ${#lines[@]} = 0 ]]; then
-        echo "Not found"
+echo "Not found"
         return
-    fi
-    local pathname
+fi
+local pathname
     local choice
     if [[ ${#lines[@]} > 1 ]]; then
-        while [[ -z "$pathname" ]]; do
-            local index=1
+while [[ -z "$pathname" ]]; do
+local index=1
             local line
             for line in ${lines[@]}; do
-                printf "%6s %s\n" "[$index]" $line
+printf "%6s %s\n" "[$index]" $line
                 index=$(($index + 1))
             done
-            echo
-            echo -n "Select one: "
+echo
+echo -n "Select one: "
             unset choice
             read choice
             if [[ $choice -gt ${#lines[@]} || $choice -lt 1 ]]; then
-                echo "Invalid choice"
+echo "Invalid choice"
                 continue
-            fi
-            pathname=${lines[$(($choice-1))]}
+fi
+pathname=${lines[$(($choice-1))]}
         done
-    else
-        pathname=${lines[0]}
+else
+pathname=${lines[0]}
     fi
-    cd $T/$pathname
+cd $T/$pathname
+}
+
+function mka() {
+    case `uname -s` in
+        Darwin)
+            make -j `sysctl hw.ncpu|cut -d" " -f2` "$@"
+            ;;
+        *)
+            schedtool -B -n 1 -e ionice -n 1 make -j$(cat /proc/cpuinfo | grep "^processor" | wc -l) "$@"
+            ;;
+    esac
+}
+
+function mbot() {
+    unset LUNCH_MENU_CHOICES
+    croot
+    ./vendor/viper/bot/deploy.sh
+}
+
+function mkapush() {
+    # There's got to be a better way to do this stupid shit.
+    case `uname -s` in
+        Darwin)
+            if [ ! -f $ANDROID_PRODUCT_OUT/installed-files.txt ]; then
+make -j `sysctl hw.ncpu|cut -d" " -f2` installed-file-list
+            fi
+make -j `sysctl hw.ncpu|cut -d" " -f2` "$@"
+            ;;
+        *)
+            if [ ! -f $ANDROID_PRODUCT_OUT/installed-files.txt ]; then
+schedtool -B -n 1 -e ionice -n 1 make -j$(cat /proc/cpuinfo | grep "^processor" | wc -l) installed-file-list
+            fi
+schedtool -B -n 1 -e ionice -n 1 make -j$(cat /proc/cpuinfo | grep "^processor" | wc -l) "$@"
+            ;;
+    esac
+case $@ in
+        *\ * )
+            echo $@ | awk 'gsub(/ /,"\n") {print}' | while read line; do
+blackmagic=`sed -n "/$line/{p;q;}" $ANDROID_PRODUCT_OUT/installed-files.txt | awk {'print $2'}`
+                if [ `echo $blackmagic | cut -f3 -d "/" = framework ];
+                elif [ `echo $blackmagic | cut -f4 -d "/" = SystemUI.apk ]; then
+adb_stop=true
+fi
+adb remount
+                if [ $adb_stop = true ]; then
+adb shell stop
+                fi
+adb push $ANDROID_PRODUCT_OUT$blackmagic $blackmagic
+                if [ $adb_stop = true ]; then
+adb shell start
+                fi
+done
+            ;;
+        *)
+            blackmagic=`sed -n "/$@/{p;q;}" $ANDROID_PRODUCT_OUT/installed-files.txt | awk {'print $2'}`
+            if [ `echo $blackmagic | cut -f3 -d "/" = framework ];
+            elif [ `echo $blackmagic | cut -f4 -d "/" = SystemUI.apk ]; then
+adb_stop=true
+fi
+adb remount
+            if [ $adb_stop = true ]; then
+adb shell stop
+            fi
+adb push $ANDROID_PRODUCT_OUT$blackmagic $blackmagic
+            if [ $adb_stop = true ]; then
+adb shell start
+            fi
+            ;;
+    esac
+}
+
+function pstest() {
+    if [ -z "$1" ] || [ "$1" = '--help' ] || [[ "$1" != */* ]]
+    then
+echo "pstest"
+        echo "to use: pstest PATCH_ID/PATCH_SET"
+        echo "example: pstest 5555/5"
+    else
+gerrit=gerrit.sudoservers.com
+        project=`git config --get remote.viper.projectname`
+        patch="$1"
+        submission=`echo $patch | cut -f1 -d "/" | tail -c 3`
+        git fetch http://$gerrit/$project refs/changes/$submission/$patch && git cherry-pick FETCH_HEAD
+    fi
+}
+
+function taco() {
+    for sauce in "$@"
+    do
+breakfast $sauce
+        if [ $? -eq 0 ]; then
+croot
+            ./vendor/viper/bot/build_device.sh viper_$sauce-userdebug $sauce
+        else
+echo "No such item in brunch menu. Try 'breakfast'"
+        fi
+done
+}
+
+function reposync() {
+    case `uname -s` in
+        Darwin)
+            repo sync -j 4 "$@"
+            ;;
+        *)
+            schedtool -B -n 1 -e ionice -n 1 repo sync -j 4 "$@"
+            ;;
+    esac
 }
 
 # Force JAVA_HOME to point to java 1.6 if it isn't already set
 function set_java_home() {
     if [ ! "$JAVA_HOME" ]; then
-        case `uname -s` in
+case `uname -s` in
             Darwin)
                 export JAVA_HOME=/System/Library/Frameworks/JavaVM.framework/Versions/1.6/Home
                 ;;
@@ -1137,11 +1358,11 @@ function set_java_home() {
                 export JAVA_HOME=/usr/lib/jvm/java-6-sun
                 ;;
         esac
-    fi
+fi
 }
 
 if [ "x$SHELL" != "x/bin/bash" ]; then
-    case `ps -o command -p $$` in
+case `ps -o command -p $$` in
         *bash*)
             ;;
         *)
@@ -1153,7 +1374,7 @@ fi
 # Execute the contents of any vendorsetup.sh files we can find.
 for f in `/bin/ls vendor/*/vendorsetup.sh vendor/*/*/vendorsetup.sh device/*/*/vendorsetup.sh 2> /dev/null`
 do
-    echo "including $f"
+echo "including $f"
     . $f
 done
 unset f
